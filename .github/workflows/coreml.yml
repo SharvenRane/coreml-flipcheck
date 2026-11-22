@@ -1,0 +1,84 @@
+name: coreml-flipcheck
+
+# Converts each model with every recipe, runs the Core ML predictions on a macOS runner and uploads
+# report.md and report.json. GitHub hosted macOS runners are virtual machines: treat the `gpu`, `ne`
+# and `all` rows as what Core ML did on that VM (see the compute plan section of the report), not as
+# Neural Engine results from a physical device.
+
+on:
+  workflow_dispatch:
+    inputs:
+      models:
+        description: "JSON list of torchvision model names"
+        default: '["resnet18", "mobilenet_v3_small"]'
+      recipes:
+        description: "comma list, default or all"
+        default: "all"
+      compute_units:
+        description: "comma list of cpu, gpu, ne, all"
+        default: "cpu,gpu,ne,all"
+      n_eval:
+        description: "number of eval images"
+        default: "1000"
+  schedule:
+    - cron: "17 6 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  flipcheck:
+    runs-on: macos-15
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        model: ${{ fromJSON(github.event.inputs.models || '["resnet18", "mobilenet_v3_small"]') }}
+    env:
+      RECIPES: ${{ github.event.inputs.recipes || 'all' }}
+      COMPUTE_UNITS: ${{ github.event.inputs.compute_units || 'cpu,gpu,ne,all' }}
+      N_EVAL: ${{ github.event.inputs.n_eval || '1000' }}
+      WORK: runs/${{ matrix.model }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch==2.11.0 torchvision==0.26.0 coremltools==9.0
+          pip install -e .
+      - name: Cache Imagenette
+        uses: actions/cache@v6
+        with:
+          path: .cache/imagenette2-320.tgz
+          key: imagenette2-320-v1
+      - name: Prepare data
+        run: coreml-flipcheck prepare-data --download 320 --cache .cache --out data --n-eval "$N_EVAL"
+      - name: Reference (PyTorch CPU fp32 + noise floor controls)
+        run: coreml-flipcheck reference --model "${{ matrix.model }}" --data data --workdir "$WORK"
+      - name: Probe selection
+        run: coreml-flipcheck probe-select --workdir "$WORK" --n 200
+      - name: Convert
+        run: coreml-flipcheck convert --model "${{ matrix.model }}" --workdir "$WORK" --recipes "$RECIPES" --data data
+      - name: Predict (Core ML)
+        # a failed recipe or compute unit is recorded in the report rather than failing the job
+        run: coreml-flipcheck predict --workdir "$WORK" --data data --compute-units "$COMPUTE_UNITS" || true
+      - name: Report
+        run: |
+          coreml-flipcheck report --workdir "$WORK" --data data
+          cat "$WORK/report.md" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: flipcheck-${{ matrix.model }}
+          path: |
+            ${{ env.WORK }}/report.md
+            ${{ env.WORK }}/report.json
+            ${{ env.WORK }}/models/convert.json
+            ${{ env.WORK }}/reference/reference.json
+            ${{ env.WORK }}/probe/probe.json
+            ${{ env.WORK }}/predictions/*.json
+          if-no-files-found: warn
