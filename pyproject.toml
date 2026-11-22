@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "coreml-flipcheck"
+version = "0.1.0"
+description = "Check whether converting a PyTorch classifier to Core ML changes per input decisions, not just accuracy."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Sharven Rane" }]
+requires-python = ">=3.10"
+keywords = ["coreml", "coremltools", "on-device", "quantization", "palettization", "model-conversion", "pytorch"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "pillow>=10",
+    "torch>=2.1",
+    "torchvision>=0.16",
+    "coremltools>=8.1,<10; sys_platform != 'win32'",
+]
+
+[project.optional-dependencies]
+timm = ["timm>=1.0"]
+test = ["pytest>=8"]
+
+[project.scripts]
+coreml-flipcheck = "coreml_flipcheck.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning"]
