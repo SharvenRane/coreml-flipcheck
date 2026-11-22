@@ -28,6 +28,6 @@ jobs:
           else
             pip install torch==2.11.0 torchvision==0.26.0
           fi
-          pip install -e ".[test]" coremltools==9.0
+          pip install -e ".[test]" coremltools==9.0 scikit-learn
       - name: pytest
         run: pytest -q
