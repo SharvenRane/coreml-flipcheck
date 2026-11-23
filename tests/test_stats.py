@@ -89,3 +89,10 @@ def test_verdict_against_noise_floor():
 def test_shape_mismatch_raises():
     with pytest.raises(ValueError):
         stats.compare(np.zeros((3, 4)), np.zeros((3, 5)))
+
+
+def test_mcnemar_exact_handles_many_discordant_pairs():
+    # 2**n overflowed a float once n passed 1023 discordant pairs
+    p = stats.mcnemar_exact(900, 600)
+    assert 0.0 <= p < 1e-10
+    assert stats.mcnemar_exact(700, 700) == pytest.approx(1.0, abs=0.03)

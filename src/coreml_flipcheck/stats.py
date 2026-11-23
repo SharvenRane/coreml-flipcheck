@@ -13,7 +13,6 @@ noise floor   flip rate of the reference model against itself under a harmless c
 """
 from __future__ import annotations
 
-import math
 from dataclasses import asdict, dataclass
 
 import numpy as np
@@ -70,9 +69,11 @@ def mcnemar_exact(b: int, c: int) -> float:
     n = b + c
     if n == 0:
         return 1.0
+    from scipy import stats
+
+    # binomial CDF in scipy, not comb(n, i) / 2**n, which overflows a float once n passes 1023
     k = min(b, c)
-    tail = sum(math.comb(n, i) for i in range(k + 1)) / 2.0**n
-    return float(min(1.0, 2.0 * tail))
+    return float(min(1.0, 2.0 * stats.binom.cdf(k, n, 0.5)))
 
 
 def auroc(score: np.ndarray, positive: np.ndarray) -> float:
